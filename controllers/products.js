@@ -1,17 +1,19 @@
 const Product = require('../models/product');
 
 module.exports.getProducts = async (req,res) => {
-    console.log("Keys:",Object.keys(Product.schema.obj));
 
-    let queryObject = {};
-    Object.keys(Product.schema.obj).forEach(key => {
-        if(!!req.query[key]){
-            queryObject = {...queryObject, [key]: req.query[key]}
-        }
-    });
-    console.log("Query obj: ", queryObject);
-
-    const products = await Product.find(queryObject);
+    const queryObject = generateQueryObject(req.query,Product);
+    const sorterString = getSorterString(req.query);
+    const selectorString = getSelectorString(req.query);
+    const limit = getLimit(req.query);
+    const skip = getSkip(req.query);
+    //Filtering, sorting and selecting
+    const products = await Product.find(queryObject)
+            .sort(sorterString)
+            .select(selectorString)
+            .limit(limit)
+            .skip(skip);
+            
     res.status(200).json({nbHits: products.length, products : products})
 }
 module.exports.insertProduct = async (req,res) => {
@@ -34,4 +36,51 @@ module.exports.getProductStatic = async (req,res) => {
     res.status(200).json({nbHits: products.length, products : products})
 }
 
-//Video kalınan dakika 4:20:51 / 9:59:58
+
+//Todo Burası genelleştirilecek.
+const generateQueryObject = (reqQuery,T) => {
+    let queryObject = {};
+    Object.keys(T.schema.obj).forEach(key => {
+        if(!!reqQuery[key]){
+            queryObject = {...queryObject, [key]: filterGeneratorAccordingToType(T.schema.obj[key].type, reqQuery[key])}
+        }
+    });
+
+    return queryObject;
+}
+
+
+const filterGeneratorAccordingToType = (type, value) => {
+    switch(type) {
+        case String: 
+        return { $regex : value, $options : 'i'};
+        case Number : 
+        return { $lt : Number(value)};
+        case Boolean :
+        return value === 'true';
+        default :
+        return value;
+    }
+}
+
+
+//Sorting
+const getSorterString = (reqQuery) => {
+    const { sort } = reqQuery; 
+    return sort?.toString().replace(/,/g,' ')
+}
+
+const getSelectorString = (reqQuery) => {
+    const { select } = reqQuery; 
+    return select?.toString().replace(/,/g,' ')
+}
+const getLimit = (reqQuery) => {
+    const { limit } = reqQuery; 
+    return !!limit ? Number(limit) : undefined;
+}
+const getSkip = (reqQuery) => {
+    const { skip } = reqQuery; 
+    return !!skip ? Number(skip) : undefined;
+}
+
+//Video kalınan dakika 5:05:00 / 9:59:58
